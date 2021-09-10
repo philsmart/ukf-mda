@@ -47,19 +47,37 @@ import net.shibboleth.utilities.java.support.xml.ElementSupport;
 public class PSEValidationStage extends BaseIteratingStage<Element> {
 
     /** Collection of role descriptor names to process. */
-    @Nonnull private Set<QName> roleNames = Collections.emptySet();
-
+    @Nonnull @NonnullElements @Unmodifiable @GuardedBy("this")
+    private Set<QName> roleNames = Collections.emptySet();
 
     /** Set of permitted <code>protocolSupportEnumeration</code> tokens. */
     @Nonnull @NonnullElements @Unmodifiable @GuardedBy("this")
     private Set<String> validTokens = Collections.emptySet();
 
     /**
+     * Returns the collection of role descriptor names to process.
+     *
+     * @return the collection of role descriptor names to process
+     */
+    @Nonnull @NonnullElements @Unmodifiable public synchronized Set<QName> getRoleNames() {
+        return roleNames;
+    }
+
+    /**
+     * Sets the collection of role descriptor names to process.
+     *
+     * @param roles the collection of role descriptor names to process
+     */
+    public synchronized void setRoleNames(@Nonnull @NonnullElements @Unmodifiable final Collection<QName> roles) {
+        roleNames = ImmutableSet.copyOf(roles);
+    }
+
+    /**
      * Returns the permitted <code>protocolSupportEnumeration</code> tokens.
      *
      * @return the set of permitted tokens
      */
-    @Nonnull @NonnullElements @Unmodifiable public Set<String> getValidTokens() {
+    @Nonnull @NonnullElements @Unmodifiable public synchronized Set<String> getValidTokens() {
         return validTokens;
     }
 
@@ -68,7 +86,7 @@ public class PSEValidationStage extends BaseIteratingStage<Element> {
      *
      * @param tokens collection of <code>protocolSupportEnumeration</code> tokens to be permitted
      */
-    public void setValidTokens(@Nonnull @NonnullElements @Unmodifiable final Collection<String> tokens) {
+    public synchronized void setValidTokens(@Nonnull @NonnullElements @Unmodifiable final Collection<String> tokens) {
         validTokens = ImmutableSet.copyOf(tokens);
     }
 
@@ -81,9 +99,13 @@ public class PSEValidationStage extends BaseIteratingStage<Element> {
             return true;
         }
 
+        // Snapshot bean state
+        final Set<QName> roles = getRoleNames();
+        final Set<String> tokens = getValidTokens();
+
         // Collect all the role descriptors to be processed.
         final List<Element> roleDescriptors = new ArrayList<>();
-        for (final QName roleName : roleNames) {
+        for (final QName roleName : roles) {
             final List<Element> roleElements = ElementSupport.getChildElements(entity, roleName);
             roleDescriptors.addAll(roleElements);
         }
@@ -93,7 +115,7 @@ public class PSEValidationStage extends BaseIteratingStage<Element> {
             final List<String> pSEValues = AttributeSupport.getAttributeValueAsList(
                             roleDescriptor.getAttributeNode("protocolSupportEnumeration"));
             for (final String uri : pSEValues) {
-                if (!validTokens.contains(uri)) {
+                if (!tokens.contains(uri)) {
                     final StringBuilder b = new StringBuilder(roleDescriptor.getLocalName());
                     b.append("/@protocolSupportEnumeration contains unknown token ");
                     b.append(uri);
@@ -101,7 +123,6 @@ public class PSEValidationStage extends BaseIteratingStage<Element> {
                 }
             }
         }
-
 
         return true;
     }
